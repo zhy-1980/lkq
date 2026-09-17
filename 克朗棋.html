@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="克郎球">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#10141c">
+<title>克郎球 Carrom</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; height: 100%; overscroll-behavior: none; }
+  body {
+    background: radial-gradient(1200px 800px at 50% -100px, #2b3444 0%, #171c26 60%, #10141c 100%);
+    color: #e8e6df;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; justify-content: center; align-items: flex-start;
+    user-select: none; touch-action: manipulation;
+  }
+  #layout {
+    display: flex; gap: 16px; align-items: flex-start; padding: 12px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  #sideCol {
+    flex: 0 0 252px; display: flex; flex-direction: column; gap: 10px;
+    position: sticky; top: 12px; height: calc(100vh - 24px);
+  }
+  #app { flex: 1 1 1100px; max-width: 1100px; min-width: 0; padding-bottom: 16px; }
+  header { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 0; }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: 2px; font-weight: 600; }
+  header h1 span { color: #e0a44c; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    background: linear-gradient(180deg, #3a4356, #2b3342);
+    color: #e8e6df; border: 1px solid #4a5568; border-radius: 8px;
+    padding: 6px 12px; font-size: 13px; cursor: pointer;
+    transition: all .15s;
+  }
+  button:hover { border-color: #e0a44c; color: #ffd9a0; }
+  button:active { transform: scale(.96); }
+  #scorebar { display: flex; align-items: stretch; gap: 8px; }
+  .pcard {
+    flex: 1; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 8px 10px; transition: all .25s;
+  }
+  .pcard.active { border-color: #e0a44c; box-shadow: 0 0 14px rgba(224,164,76,.35); background: rgba(224,164,76,.08); }
+  .pcard .pname { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; flex-wrap: wrap; }
+  .dot { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+  .dot.w { background: radial-gradient(circle at 35% 30%, #fffdf5, #d8c8a4); box-shadow: inset 0 0 2px #8a7a55; }
+  .dot.b { background: radial-gradient(circle at 35% 30%, #5a4636, #221a12); box-shadow: inset 0 0 2px #000; }
+  .qbadge {
+    width: 14px; height: 14px; border-radius: 50%; display: none;
+    background: radial-gradient(circle at 35% 30%, #ff8a7a, #b03024);
+    box-shadow: 0 0 6px rgba(255,90,70,.8); font-size: 9px; line-height: 14px;
+    text-align: center; color: #fff; font-weight: 700;
+  }
+  .qbadge.pending { display: inline-block; animation: pulse 1s infinite; }
+  .qbadge.owned { display: inline-block; }
+  @keyframes pulse { 50% { transform: scale(1.25); } }
+  .pips { display: flex; gap: 2px; margin-top: 5px; }
+  .pip { width: 7px; height: 7px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); }
+  .pip.on.w { background: #f0e6c8; border-color: #f0e6c8; }
+  .pip.on.b { background: #6b543f; border-color: #8a7154; }
+  #turnArrow { align-self: center; font-size: 20px; color: #e0a44c; text-align: center; min-width: 30px; }
+  #stage { position: relative; }
+  canvas {
+    display: block; height: auto;
+    width: clamp(300px, calc((100vh - 80px) * 0.9428), 100%);
+    border-radius: 14px;
+    box-shadow: 0 14px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+    touch-action: none; cursor: crosshair;
+  }
+  #toasts {
+    position: absolute; top: 12px; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    pointer-events: none;
+  }
+  .toast {
+    background: rgba(10,12,18,.85); border: 1px solid rgba(224,164,76,.5);
+    color: #ffe1b0; padding: 5px 16px; border-radius: 20px; font-size: 13px;
+    animation: fadein .2s; box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  .toast.out { opacity: 0; transition: opacity .5s; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(-6px); } }
+  #hint { text-align: center; font-size: 12.5px; color: #9aa3b2; padding: 9px 4px 2px; min-height: 28px; }
+  #sideHelp {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 12px 14px;
+    font-size: 12px; line-height: 1.75; color: #b9c1cf;
+  }
+  #sideHelp h3 { margin: 0 0 8px; color: #e0a44c; font-size: 14px; letter-spacing: 2px; font-weight: 600; }
+  #sideHelp ul { margin: 0; padding-left: 15px; }
+  #sideHelp li { margin-bottom: 7px; }
+  #sideHelp b { color: #e8dcbf; }
+  #sideHelp.hide { display: none; }
+  .dialog textarea {
+    width: 100%; min-height: 64px; margin: 6px 0 2px; padding: 8px;
+    background: rgba(0,0,0,.35); color: #cfe0ff; border: 1px solid #4a5568;
+    border-radius: 8px; font-size: 11px; font-family: Consolas, monospace; resize: vertical;
+  }
+  .row2 { display: flex; gap: 8px; margin-top: 8px; }
+  .row2 button { flex: 1; }
+  #netStatus { text-align: center; font-size: 13px; color: #ffd9a0; margin-top: 8px; min-height: 18px; }
+  #watermark {
+    position: fixed; left: 0; right: 0; bottom: 4px; text-align: center;
+    bottom: calc(4px + env(safe-area-inset-bottom));
+    font-size: 12px; letter-spacing: 1px; color: rgba(232,230,223,.28);
+    pointer-events: none; z-index: 40; text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+  @media (max-width: 980px) {
+    #layout { flex-direction: column; align-items: center; }
+    #sideCol { position: static; height: auto; width: 100%; max-width: 1100px; flex: none; }
+    #sideHelp { max-height: 42vh; }
+    header h1 { font-size: 17px; }
+    button { padding: 6px 10px; font-size: 12px; }
+  }
+  /* 手机横屏：收起帮助面板，保持棋盘优先 */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #layout { flex-direction: row; }
+    #sideCol { flex: 0 0 190px; height: auto; }
+    #sideHelp { display: none; }
+    header h1 { font-size: 14px; }
+    .btns { gap: 4px; }
+  }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(5,8,14,.72); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .dialog {
+    background: linear-gradient(180deg, #232b3a, #1a212e);
+    border: 1px solid #4a5568; border-radius: 14px;
+    max-width: 420px; width: 88%; padding: 22px 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    max-height: 82vh; overflow-y: auto;
+  }
+  .dialog h2 { margin: 0 0 12px; font-size: 18px; color: #e0a44c; }
+  .dialog p, .dialog li { font-size: 13.5px; line-height: 1.75; color: #c9cfd9; margin: 6px 0; }
+  .dialog ul { padding-left: 18px; margin: 6px 0; }
+  .dialog .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .dialog .primary { background: linear-gradient(180deg, #d99a3e, #b57a26); border-color: #e0a44c; color: #1a1206; font-weight: 600; }
+  #winTitle { text-align: center; font-size: 24px; margin: 6px 0 4px; }
+  #winStats { text-align: center; }
+  .statrow { display: flex; justify-content: center; gap: 18px; margin: 10px 0; }
+  .stat { text-align: center; }
+  .stat .v { font-size: 22px; font-weight: 700; color: #ffd9a0; }
+  .stat .k { font-size: 11px; color: #9aa3b2; }
+  #name0, #name1 { cursor: pointer; border-bottom: 1px dashed rgba(255,255,255,.35); }
+  #lbTable { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  #lbTable th, #lbTable td { padding: 7px 8px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.1); }
+  #lbTable th { color: #9aa3b2; font-weight: 600; font-size: 12px; }
+  #lbTable td.n { text-align: left; color: #e8dcbf; font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #lbTable tr.top td { color: #ffd9a0; }
+  #lbEmpty { text-align: center; color: #9aa3b2; font-size: 13px; padding: 18px 0; }
+</style>
+</head>
+<body>
+<div id="layout">
+<aside id="sideCol">
+  <header>
+    <h1>克郎球 <span>CARROM</span></h1>
+    <div class="btns">
+      <button id="btnMode">模式：人机</button>
+      <button id="btnNet">联机</button>
+      <button id="btnSound">音效：开</button>
+      <button id="btnNew">新游戏</button>
+      <button id="btnBoard">积分榜</button>
+      <button id="btnHelp">玩法说明</button>
+    </div>
+  </header>
+  <div id="scorebar">
+    <div class="pcard" id="card0">
+      <div class="pname"><span class="dot w"></span><span id="name0" title="点击修改昵称">玩家（白）</span><span class="qbadge" id="q0">Q</span></div>
+      <div class="pips" id="pips0"></div>
+    </div>
+    <div id="turnArrow">◀</div>
+    <div class="pcard" id="card1">
+      <div class="pname"><span class="dot b"></span><span id="name1" title="点击修改昵称">对手（黑）</span><span class="qbadge" id="q1">Q</span></div>
+      <div class="pips" id="pips1"></div>
+    </div>
+  </div>
+  <aside id="sideHelp" class="hide">
+    <h3>玩法说明</h3>
+    <ul>
+      <li><b>目标</b>：先把自己 9 枚棋子全部打进袋者获胜。白方从下方出杆，黑方从上方出杆。</li>
+      <li><b>摆放</b>：按住选手球沿底线左右拖动。</li>
+      <li><b>瞄准</b>：在盘面空白处按住、向后拖动（弹弓式），松手出杆，拖得越远力度越大。</li>
+      <li><b>连击</b>：打进己方棋子可继续出杆；一杆未进换对方。</li>
+      <li><b>对方棋子</b>：打进对方棋子计入对方，并交换出杆。</li>
+      <li><b>皇后（红）</b>：打进后下一杆必须再进一枚己方棋子来覆盖，失败则退回盘心；皇后未解决前不能打进最后一枚己方棋子。</li>
+      <li><b>犯规</b>：选手球落袋，罚退一枚己方已进棋子并换对方出杆。</li>
+      <li><b>对战</b>：点击「模式：双人」切换为本地两人对战；点击玩家昵称可改名，每局结果自动记入「积分榜」。</li>
+      <li><b>联机</b>：双方点「联机」，按弹窗三步交换代码即可手机间点对点对战（需能上网），房执白先行。</li>
+    </ul>
+  </aside>
+</aside>
+<div id="app">
+  <div id="stage">
+    <canvas id="game"></canvas>
+    <div id="toasts"></div>
+  </div>
+  <div id="hint"></div>
+</div>
+<div id="watermark">ZHY制作 2026.9.17</div>
+
+<div class="overlay" id="winModal">
+  <div class="dialog">
+    <h2 style="text-align:center">对局结束</h2>
+    <div id="winTitle"></div>
+    <div id="winStats" class="statrow"></div>
+    <div class="row">
+      <button id="btnCloseWin">关闭</button>
+      <button class="primary" id="btnAgain">再来一局</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="lbModal">
+  <div class="dialog">
+    <h2>积分榜</h2>
+    <table id="lbTable">
+      <thead><tr><th style="width:44px">排名</th><th style="text-align:left">玩家</th><th>胜场</th><th>对局</th><th>胜率</th></tr></thead>
+      <tbody id="lbBody"></tbody>
+    </table>
+    <div id="lbEmpty" style="display:none">暂无战绩，完成一局后自动记录</div>
+    <div class="row">
+      <button id="btnLbClear">清空记录</button>
+      <button class="primary" id="btnLbClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="netModal">
+  <div class="dialog">
+    <h2>联机对战（点对点）</h2>
+    <p style="font-size:12.5px">① 一方点「<b style="color:#ffd9a0">创建邀请码</b>」，把生成的代码发给对方（微信/QQ 均可）<br>
+       ② 对方粘贴代码后点「<b style="color:#ffd9a0">生成应答码</b>」，再回传给发起方<br>
+       ③ 发起方粘贴应答码，点「<b style="color:#ffd9a0">连接</b>」即完成配对，房执白先行</p>
+    <div class="row2">
+      <button id="btnNetHost">创建邀请码</button>
+      <button id="btnNetJoin">生成应答码</button>
+    </div>
+    <textarea id="netIn" placeholder="把对方的代码粘贴到这里"></textarea>
+    <textarea id="netOut" readonly placeholder="你的代码会出现在这里，复制后发给对方"></textarea>
+    <div class="row2">
+      <button id="btnNetCopy">复制上方代码</button>
+      <button id="btnNetConnect" class="primary">连接</button>
+    </div>
+    <div id="netStatus">未连接</div>
+    <div class="row">
+      <button id="btnNetClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= 常量 ================= */
+const W = 660, H = 700;
+const FX = 50, FY = 50, FS = 560;              // 盘面区域
+const CX = FX + FS / 2, CY = FY + FS / 2;      // 盘心
+const COIN_R = 15, STRIKER_R = 22, QUEEN_R = 15;
+const POCKET_R = 27, POCKET_CAP = 22;
+const POCKETS = [
+  { x: FX + 28,        y: FY + 28 },
+  { x: FX + FS - 28,   y: FY + 28 },
+  { x: FX + 28,        y: FY + FS - 28 },
+  { x: FX + FS - 28,   y: FY + FS - 28 },
+];
+const BASE_OFF = 95, BASE_HALF = 160;
+const REST_COIN = 0.93, REST_WALL = 0.72;
+const MASS_COIN = 1, MASS_STRIKER = 1.7;
+const POWER_MIN = 350, POWER_MAX = 1500;
+
+function baselineY(p) { return p === 0 ? FY + FS - BASE_OFF : FY + BASE_OFF; }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function colorOf(p) { return p === 0 ? 'W' : 'B'; }
+function playerName(p) {
+  if (S.mode === 'net' && S.net) {
+    return p === S.net.myRole ? (S.names[0] || (p === 0 ? '玩家一' : '玩家二')) : (S.net.peerName || '对手');
+  }
+  if (S.names[p]) return S.names[p];
+  if (S.mode === 'ai') return p === 0 ? '玩家' : 'AI';
+  return p === 0 ? '玩家一' : '玩家二';
+}
+function isNetOpen() { return !!(S.net && S.net.dc && S.net.dc.readyState === 'open'); }
+function isNetHost() { return isNetOpen() && S.net.myRole === 0; }
+function sendNet(obj) {
+  if (!isNetOpen()) return;
+  try { S.net.dc.send(JSON.stringify(obj)); } catch (e) {}
+}
+
+/* ================= 状态 ================= */
+const S = {
+  mode: 'ai',            // 'ai' | 'pvp' | 'net'
+  names: [null, null],   // 玩家昵称（null = 使用默认名）
+  turn: 0,               // 0 白(下方) 1 黑(上方)
+  phase: 'placing',      // placing | aiming | running | over
+  coins: [],
+  striker: null,
+  queen: { onBoard: true, pendingBy: null, owner: null },
+  pocketed: [0, 0],
+  shotEvents: null,
+  shotStart: 0,
+  drag: null,            // {type:'move'|'aim', ...}
+  aim: null,             // {dir:{x,y}, power}
+  aiToken: 0, aiTween: null, timer1: null, timer2: null,
+  sound: true,
+  particles: [],
+  net: null,             // 联机：{ myRole, pc, dc, peerName }
+  netWait: false,        // 联机：本杆动画已停，等待房主结算同步
+  netWaitT: 0,
+  lastWinner: null,
+};
+
+/* ================= 音效 ================= */
+const Snd = {
+  ctx: null, lastHit: 0,
+  ensure() {
+    if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  blip(freq, dur, vol, type) {
+    if (!S.sound || !this.ctx) return;
+    try {
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.ctx.destination);
+      o.start(t); o.stop(t + dur);
+    } catch (e) {}
+  },
+  hit(v) {
+    const now = performance.now();
+    if (now - this.lastHit < 35) return;
+    this.lastHit = now;
+    this.blip(150 + 260 * v, 0.07, 0.04 + 0.22 * v, 'triangle');
+  },
+  cushion(v) { this.blip(105, 0.09, 0.05 + 0.16 * v, 'sine'); },
+  pocket() { this.blip(560, 0.12, 0.18, 'sine'); setTimeout(() => this.blip(340, 0.2, 0.18, 'sine'), 80); },
+  shoot() { this.blip(90, 0.12, 0.2, 'square'); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => this.blip(f, 0.28, 0.2, 'triangle'), i * 150)); },
+};
+
+/* ================= 棋子 ================= */
+function mkCoin(x, y, color) {
+  return { x, y, vx: 0, vy: 0, r: color === 'S' ? STRIKER_R : COIN_R,
+           m: color === 'S' ? MASS_STRIKER : MASS_COIN, color, active: true, pot: 0 };
+}
+function overlapsAny(x, y, r, ignoreStriker) {
+  for (const c of S.coins) {
+    if (!c.active || c === S.striker) continue;
+    if (Math.hypot(c.x - x, c.y - y) < r + c.r + 2) return true;
+  }
+  const st = S.striker;
+  if (!ignoreStriker && st && st.active) {
+    if (Math.hypot(st.x - x, st.y - y) < r + st.r + 2) return true;
+  }
+  return false;
+}
+function findFreeSpotNearCenter() {
+  for (let rad = 0; rad <= 130; rad += 13) {
+    const steps = rad === 0 ? 1 : Math.ceil(rad / 8);
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2 + rad;
+      const x = CX + Math.cos(a) * rad, y = CY + Math.sin(a) * rad;
+      if (x < FX + COIN_R + 4 || x > FX + FS - COIN_R - 4) continue;
+      if (y < FY + COIN_R + 4 || y > FY + FS - COIN_R - 4) continue;
+      if (!overlapsAny(x, y, COIN_R)) return { x, y };
+    }
+  }
+  return { x: CX, y: CY };
+}
+function placeCoinAtCenter(color) {
+  const sp = findFreeSpotNearCenter();
+  const c = mkCoin(sp.x, sp.y, color);
+  S.coins.push(c);
+  return c;
+}
+function setupCoins() {
+  S.coins = [];
+  S.coins.push(mkCoin(CX, CY, 'Q'));
+  for (let i = 0; i < 6; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 3;
+    S.coins.push(mkCoin(CX + Math.cos(a) * 34, CY + Math.sin(a) * 34, i % 2 ? 'B' : 'W'));
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = -Math.PI / 2 + Math.PI / 12 + i * Math.PI / 6;
+    S.coins.push(mkCoin(CX + Math.cos(a) * 68, CY + Math.sin(a) * 68, i % 2 ? 'W' : 'B'));
+  }
+}
+
+/* ================= 游戏流程 ================= */
+function resetGame(msg, fromNet) {
+  S.aiToken++;
+  clearTimeout(S.timer1); clearTimeout(S.timer2);
+  S.aiTween = null;
+  S.queen = { onBoard: true, pendingBy: null, owner: null };
+  S.pocketed = [0, 0];
+  S.particles = [];
+  S.aim = null; S.drag = null;
+  S.netWait = false; S.lastWinner = null;
+  setupCoins();
+  S.striker = mkCoin(CX, baselineY(0), 'S');
+  S.coins.push(S.striker);
+  S.turn = 0; S.phase = 'placing';
+  document.getElementById('winModal').classList.remove('show');
+  updateUI();
+  // 联机：房主重开局时同步给客人
+  if (!fromNet && S.mode === 'net') sendNet({ t: 'reset' });
+  if (msg) toast(msg);
+}
+function startTurn() {
+  const st = S.striker;
+  st.x = CX; st.y = baselineY(S.turn);
+  st.vx = 0; st.vy = 0; st.active = true;
+  S.phase = 'placing'; S.aim = null; S.drag = null;
+  updateUI();
+  if (isAITurn()) aiBegin();
+}
+function isAITurn() { return S.mode === 'ai' && S.turn === 1; }
+function isMyTurn() { return S.turn === S.net?.myRole; }
+function doShoot(dir, power) {
+  const speed = POWER_MIN + power * (POWER_MAX - POWER_MIN);
+  S.striker.vx = dir.x * speed; S.striker.vy = dir.y * speed;
+  S.shotEvents = { list: [], queen: false, striker: false };
+  S.shotStart = performance.now();
+  S.phase = 'running';
+  Snd.ensure(); Snd.shoot();
+  updateUI();
+}
+function shoot(dir, power) {
+  // 联机模式：非我方回合或连接未就绪，不允许出杆
+  if (S.mode === 'net' && (!isNetOpen() || !isMyTurn())) return;
+  doShoot(dir, power);
+  // 联机：把我方出杆参数同步给对方
+  if (S.mode === 'net' && isMyTurn()) sendNet({ t: 'shot', dir, power, striker: { x: S.striker.x, y: S.striker.y } });
+}
+function returnOneCoin(p, msgs) {
+  if (S.pocketed[p] <= 0) return;
+  S.pocketed[p]--;
+  const c = placeCoinAtCenter(colorOf(p));
+  spawnBurst(c.x, c.y, colorOf(p) === 'W' ? '#f0e6c8' : '#6b543f');
+}
+function queenReturn() {
+  if (S.queen.onBoard || S.queen.owner !== null) return;
+  placeCoinAtCenter('Q');
+  S.queen.onBoard = true;
+  S.queen.pendingBy = null;
+}
+function gameOver(winner) {
+  S.phase = 'over';
+  S.lastWinner = winner;
+  Snd.win();
+  document.getElementById('winTitle').textContent =
+    (S.mode === 'ai' && winner === 1) ? '� AI 获胜' : '🎉 ' + playerName(winner) + ' 获胜！';
+  const st = document.getElementById('winStats');
+  const qOwner = S.queen.owner === null ? '—' : playerName(S.queen.owner);
+  st.innerHTML =
+    '<div class="stat"><div class="v">' + S.pocketed[0] + '</div><div class="k">白方棋子</div></div>' +
+    '<div class="stat"><div class="v">' + S.pocketed[1] + '</div><div class="k">黑方棋子</div></div>' +
+    '<div class="stat"><div class="v" style="font-size:16px;padding-top:5px">' + qOwner + '</div><div class="k">皇后归属</div></div>' +
+    '<div style="flex-basis:100%;text-align:center;font-size:11px;color:#9aa3b2;margin-top:2px">战绩已记入积分榜</div>';
+  recordResult(winner);
+  document.getElementById('winModal').classList.add('show');
+  updateUI();
+}
+function resolveShot() {
+  const p = S.turn, opp = 1 - p;
+  const ev = S.shotEvents; S.shotEvents = null;
+  const own = ev.list.filter(c => c === colorOf(p));
+  const oppL = ev.list.filter(c => c !== colorOf(p) && c !== 'Q');
+  const msgs = [];
+  let cont = false;
+
+  if (ev.striker) {
+    msgs.push('选手球落袋！犯规');
+    S.pocketed[p] += own.length;
+    if (own.length > 0) msgs.push('本杆己方进子有效');
+    if (oppL.length > 0) { S.pocketed[opp] += oppL.length; msgs.push('打进对方棋子，计入对方'); }
+    if (ev.queen) { queenReturn(); msgs.push('皇后退回盘心'); }
+    if (S.queen.pendingBy === p) { S.queen.pendingBy = null; queenReturn(); msgs.push('覆盖失败，皇后退回盘心'); }
+    if (S.pocketed[p] > 0) returnOneCoin(p, msgs);
+    else msgs.push('（无子可退）');
+    if (S.pocketed[p] >= 9 && S.queen.onBoard) { returnOneCoin(p, msgs); msgs.push('皇后仍在盘上，棋子退回盘心'); }
+    if (S.pocketed[p] >= 9 && !S.queen.onBoard) { updateUI(); gameOver(p); return msgs; }
+    if (S.pocketed[opp] >= 9) { updateUI(); gameOver(opp); return msgs; }
+    S.turn = opp;
+  } else {
+    if (ev.queen) {
+      if (own.length > 0) { S.queen.owner = p; S.queen.pendingBy = null; msgs.push('皇后进袋并覆盖成功！'); }
+      else { S.queen.pendingBy = p; msgs.push('皇后进袋！下一杆必须覆盖'); }
+      cont = true;
+    }
+    if (S.queen.pendingBy === p && !ev.queen) {
+      if (own.length > 0) { S.queen.owner = p; S.queen.pendingBy = null; msgs.push('皇后覆盖成功！'); }
+      else { S.queen.pendingBy = null; queenReturn(); msgs.push('覆盖失败，皇后退回盘心'); }
+    }
+    if (own.length > 0) cont = true;
+    if (oppL.length > 0) {
+      S.pocketed[opp] += oppL.length;
+      msgs.push('打进对方棋子，计入对方');
+    }
+    S.pocketed[p] += own.length;
+    if (S.pocketed[p] >= 9) {
+      if (S.queen.onBoard) {
+        returnOneCoin(p, msgs);
+        msgs.push('皇后仍在盘上，最后一枚棋子退回盘心');
+        cont = false; S.turn = opp;
+      } else {
+        updateUI();
+        gameOver(p);
+        return msgs;
+      }
+    } else if (S.pocketed[opp] >= 9) {
+      updateUI();
+      gameOver(opp);
+      return msgs;
+    }
+    if (!cont) S.turn = opp;
+  }
+  updateUI();
+  msgs.forEach((m, i) => setTimeout(() => toast(m), i * 400));
+  startTurn();
+  return msgs;
+}
+
+/* ================= 物理 ================= */
+function physStep(dt) {
+  const bodies = S.coins.filter(c => c.active);
+  for (const b of bodies) {
+    if (b.vx === 0 && b.vy === 0) continue;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    // 摩擦：指数衰减 + 恒定减速（低摩擦，滑行更远）
+    const sp = Math.hypot(b.vx, b.vy);
+    let ns = sp * Math.exp(-0.55 * dt) - 40 * dt;
+    if (ns < 4) ns = 0;
+    if (sp > 0) { b.vx = b.vx / sp * ns; b.vy = b.vy / sp * ns; }
+  }
+  // 盘边反弹
+  for (const b of bodies) {
+    const r = b.r;
+    if (b.x < FX + r) { b.x = FX + r; if (b.vx < 0) { wallSnd(b); b.vx = -b.vx * REST_WALL; } }
+    if (b.x > FX + FS - r) { b.x = FX + FS - r; if (b.vx > 0) { wallSnd(b); b.vx = -b.vx * REST_WALL; } }
+    if (b.y < FY + r) { b.y = FY + r; if (b.vy < 0) { wallSnd(b); b.vy = -b.vy * REST_WALL; } }
+    if (b.y > FY + FS - r) { b.y = FY + FS - r; if (b.vy > 0) { wallSnd(b); b.vy = -b.vy * REST_WALL; } }
+  }
+  // 球间碰撞
+  for (let i = 0; i < bodies.length; i++) {
+    for (let j = i + 1; j < bodies.length; j++) {
+      collide(bodies[i], bodies[j]);
+    }
+  }
+  // 入袋检测
+  for (const b of bodies) {
+    for (const pk of POCKETS) {
+      if (Math.hypot(b.x - pk.x, b.y - pk.y) < POCKET_CAP) {
+        potBody(b, pk);
+        break;
+      }
+    }
+  }
+}
+function wallSnd(b) {
+  const sp = Math.hypot(b.vx, b.vy);
+  if (sp > 60) Snd.cushion(clamp(sp / 1200, 0, 1));
+}
+function collide(a, b) {
+  let dx = b.x - a.x, dy = b.y - a.y;
+  let d = Math.hypot(dx, dy);
+  const min = a.r + b.r;
+  if (d >= min) return;
+  if (d === 0) { d = 0.01; dx = 0.01; dy = 0; }
+  const nx = dx / d, ny = dy / d;
+  const overlap = min - d;
+  const invA = 1 / a.m, invB = 1 / b.m, invSum = invA + invB;
+  a.x -= nx * overlap * invA / invSum; a.y -= ny * overlap * invA / invSum;
+  b.x += nx * overlap * invB / invSum; b.y += ny * overlap * invB / invSum;
+  const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+  const vn = rvx * nx + rvy * ny;
+  if (vn < 0) {
+    const jI = -(1 + REST_COIN) * vn / invSum;
+    a.vx -= jI * nx * invA; a.vy -= jI * ny * invA;
+    b.vx += jI * nx * invB; b.vy += jI * ny * invB;
+    const ev = S.shotEvents;
+    if (ev && ((a.color === 'S') || (b.color === 'S')) && !ev.firstHit) {
+      ev.firstHit = true;
+    }
+    Snd.hit(clamp(-vn / 900, 0, 1));
+    // 撞击火花
+    const cx2 = a.x + nx * a.r, cy2 = a.y + ny * a.r;
+    if (-vn > 300) spawnBurst(cx2, cy2, '#ffd9a0', 4);
+  }
+}
+function potBody(b, pk) {
+  b.active = false;
+  b.vx = 0; b.vy = 0;
+  const col = b.color === 'Q' ? '#ff6b5e' : b.color === 'W' ? '#f0e6c8' : b.color === 'B' ? '#8a7154' : '#cfe0ff';
+  spawnBurst(pk.x, pk.y, col, 14);
+  Snd.pocket();
+  const ev = S.shotEvents;
+  if (!ev) return;
+  if (b.color === 'S') ev.striker = true;
+  else if (b.color === 'Q') { ev.queen = true; S.queen.onBoard = false; }
+  else ev.list.push(b.color);
+}
+function spawnBurst(x, y, color, n) {
+  n = n || 10;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
+    S.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.5 + Math.random() * 0.4, t: 0, color });
+  }
+}
+
+/* ================= AI ================= */
+function segClear(x1, y1, x2, y2, ignore, radius) {
+  const margin = radius + COIN_R - 3;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  for (const c of S.coins) {
+    if (!c.active || c === ignore) continue;
+    let t = len2 > 0 ? ((c.x - x1) * dx + (c.y - y1) * dy) / len2 : 0;
+    t = clamp(t, 0, 1);
+    const px = x1 + dx * t, py = y1 + dy * t;
+    if (Math.hypot(c.x - px, c.y - py) < margin) return false;
+  }
+  return true;
+}
+function freeStrikerX(sx, baseY) {
+  if (!overlapsAny(sx, baseY, STRIKER_R, true)) return sx;
+  for (let off = 10; off <= 220; off += 10) {
+    if (!overlapsAny(sx - off, baseY, STRIKER_R, true)) return sx - off;
+    if (!overlapsAny(sx + off, baseY, STRIKER_R, true)) return sx + off;
+  }
+  return sx;
+}
+function aiPlan() {
+  const p = S.turn, pc = colorOf(p);
+  const baseY = baselineY(p);
+  const bl = CX - BASE_HALF, br = CX + BASE_HALF;
+  const mustCover = S.queen.pendingBy === p;
+  const targets = S.coins.filter(c => c.active && c !== S.striker &&
+    (c.color === pc || (!mustCover && c.color === 'Q' && S.queen.onBoard)));
+
+  const safe = [], risky = [];
+  for (const c of targets) {
+    for (const pk of POCKETS) {
+      const dxp = pk.x - c.x, dyp = pk.y - c.y;
+      const dp = Math.hypot(dxp, dyp);
+      if (dp < 1) continue;
+      const ux = dxp / dp, uyp = dyp / dp;
+      const gx = c.x - ux * (STRIKER_R + COIN_R), gy = c.y - uyp * (STRIKER_R + COIN_R);
+      if (gx < FX + STRIKER_R + 2 || gx > FX + FS - STRIKER_R - 2 ||
+          gy < FY + STRIKER_R + 2 || gy > FY + FS - STRIKER_R - 2) continue;
+      let t = (gy - baseY) / (uyp || 1e-6);
+      if (!isFinite(t) || t <= 10) continue;
+      let sx = clamp(gx - ux * t, bl, br);
+      let dx = gx - sx, dy = gy - baseY;
+      const dl = Math.hypot(dx, dy);
+      if (dl < 1) continue;
+      dx /= dl; dy /= dl;
+      const cosCut = dx * ux + dy * uyp;
+      if (cosCut < 0.22) continue;
+      if (!segClear(sx, baseY, gx, gy, c, STRIKER_R)) continue;
+      if (!segClear(c.x, c.y, pk.x, pk.y, c, COIN_R)) continue;
+      let score = Math.pow(cosCut, 1.5) / (1 + dl / 500) / (1 + dp / 600);
+      if (c.color === 'Q') score *= 0.55;
+      if (mustCover && c.color === pc) score *= 1.8;
+      const item = { score, sx, c, dl, dp, gx, gy, baseY };
+      if (Math.hypot(gx - pk.x, gy - pk.y) > POCKET_CAP + STRIKER_R + 4) safe.push(item);
+      else risky.push(item);
+    }
+  }
+  const pool = safe.length ? safe : risky;
+  if (pool.length) {
+    pool.sort((a, b) => b.score - a.score);
+    const best = pool[Math.random() < 0.8 ? 0 : Math.min(1, pool.length - 1)];
+    const sx = freeStrikerX(best.sx, baseY);
+    const jitter = (Math.random() - 0.5) * (Math.random() < 0.15 ? 0.05 : 0.016);
+    const ang = Math.atan2(best.gy - baseY, best.gx - sx) + jitter;
+    const power = clamp(0.5 + (best.dl + best.dp * 1.35) / 1600, 0.55, 1);
+    return { x: sx, dir: { x: Math.cos(ang), y: Math.sin(ang) }, power };
+  }
+  // 兜底：直接打最近的目标棋
+  let tgt = null, bd = Infinity;
+  for (const c of targets) {
+    const d = Math.hypot(c.x - CX, c.y - baseY);
+    if (d < bd) { bd = d; tgt = c; }
+  }
+  if (!tgt) tgt = S.coins.find(c => c.active && c !== S.striker);
+  const sx = freeStrikerX(CX, baseY);
+  if (!tgt) return { x: sx, dir: { x: 0, y: p === 0 ? -1 : 1 }, power: 0.6 };
+  const ang = Math.atan2(tgt.y - baseY, tgt.x - sx) + (Math.random() - 0.5) * 0.04;
+  return { x: sx, dir: { x: Math.cos(ang), y: Math.sin(ang) }, power: 0.75 };
+}
+function aiBegin() {
+  const token = ++S.aiToken;
+  updateUI();
+  S.timer1 = setTimeout(() => {
+    if (token !== S.aiToken || S.phase !== 'placing') return;
+    const plan = aiPlan();
+    S.aiTween = {
+      t0: performance.now(), dur: 600,
+      from: S.striker.x, to: plan.x,
+      done: () => {
+        if (token !== S.aiToken) return;
+        S.timer2 = setTimeout(() => {
+          if (token !== S.aiToken || S.phase !== 'placing') return;
+          shoot(plan.dir, plan.power);
+        }, 420);
+      }
+    };
+  }, 620);
+}
+
+/* ================= 瞄准射线 ================= */
+function castRay(px, py, dx, dy) {
+  let bestT = Infinity, hitCoin = null;
+  for (const c of S.coins) {
+    if (!c.active || c === S.striker) continue;
+    const mx = c.x - px, my = c.y - py;
+    const proj = mx * dx + my * dy;
+    if (proj <= 0) continue;
+    const perp2 = mx * mx + my * my - proj * proj;
+    const rr = (c.r + STRIKER_R) * (c.r + STRIKER_R);
+    if (perp2 > rr) continue;
+    const t = proj - Math.sqrt(rr - perp2);
+    if (t > 0 && t < bestT) { bestT = t; hitCoin = c; }
+  }
+  // 墙壁
+  const wallTs = [];
+  if (dx < 0) wallTs.push((FX + STRIKER_R - px) / dx);
+  if (dx > 0) wallTs.push((FX + FS - STRIKER_R - px) / dx);
+  if (dy < 0) wallTs.push((FY + STRIKER_R - py) / dy);
+  if (dy > 0) wallTs.push((FY + FS - STRIKER_R - py) / dy);
+  for (const wt of wallTs) if (wt > 0 && wt < bestT) { bestT = wt; hitCoin = null; }
+  // 袋口
+  for (const pk of POCKETS) {
+    const mx = pk.x - px, my = pk.y - py;
+    const proj = mx * dx + my * dy;
+    if (proj <= 0) continue;
+    const perp = Math.hypot(mx - dx * proj, my - dy * proj);
+    if (perp < POCKET_CAP - 4 && proj < bestT) { bestT = proj; hitCoin = { pocket: true, x: pk.x, y: pk.y }; }
+  }
+  return { t: bestT === Infinity ? 400 : bestT, hit: hitCoin };
+}
+
+/* ================= 输入 ================= */
+const canvas = document.getElementById('game');
+function ptFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: (e.clientX - rect.left) * (W / rect.width), y: (e.clientY - rect.top) * (H / rect.height) };
+}
+function inputAllowed() {
+  if (S.phase !== 'placing' && S.phase !== 'aiming') return false;
+  if (isAITurn()) return false;
+  if (S.mode === 'net' && (!isNetOpen() || !isMyTurn())) return false;
+  return true;
+}
+canvas._onDown = e => {
+  Snd.ensure();
+  if (!inputAllowed()) return;
+  const p = ptFromEvent(e);
+  const st = S.striker;
+  if (Math.hypot(p.x - st.x, p.y - st.y) < STRIKER_R + 18) {
+    S.drag = { type: 'move' };
+  } else {
+    S.drag = { type: 'aim' };
+    S.phase = 'aiming';
+  }
+  canvas.setPointerCapture && (() => { try { canvas.setPointerCapture(e.pointerId); } catch (err) {} })();
+  e.preventDefault();
+};
+canvas._onMove = e => {
+  if (!S.drag || !inputAllowed()) return;
+  const p = ptFromEvent(e);
+  const st = S.striker;
+  if (S.drag.type === 'move') {
+    st.x = clamp(p.x, CX - BASE_HALF, CX + BASE_HALF);
+    st.y = baselineY(S.turn);
+  } else {
+    const vx = st.x - p.x, vy = st.y - p.y;
+    const len = Math.hypot(vx, vy);
+    if (len > 4) {
+      S.aim = { dir: { x: vx / len, y: vy / len }, power: clamp(len / 230, 0, 1) };
+    } else S.aim = null;
+  }
+  e.preventDefault();
+};
+function endDrag(e) {
+  if (!S.drag) return;
+  if (S.drag.type === 'aim' && S.aim && S.aim.power > 0.07 && inputAllowed()) {
+    S.drag = null;
+    shoot(S.aim.dir, S.aim.power);
+    return;
+  }
+  S.drag = null; S.aim = null;
+  if (S.phase === 'aiming') S.phase = 'placing';
+  updateUI();
+}
+canvas.addEventListener('pointerdown', canvas._onDown);
+canvas.addEventListener('pointermove', canvas._onMove);
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+/* iOS 12 / 旧版 Safari 无 PointerEvent（iOS 13 才引入）：触摸事件驱动同一套逻辑 */
+if (!window.PointerEvent) {
+  let touchId = null;
+  const toPt = t => ({ clientX: t.clientX, clientY: t.clientY, pointerId: 1, preventDefault() {} });
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault(); Snd.ensure();
+    if (touchId !== null || e.changedTouches.length !== 1) return;
+    touchId = e.changedTouches[0].identifier;
+    canvas._onDown(toPt(e.changedTouches[0]));
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchId) canvas._onMove(toPt(e.changedTouches[i]));
+    }
+  }, { passive: false });
+  const touchUp = e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === touchId) { touchId = null; endDrag(toPt(e.changedTouches[i])); }
+    }
+  };
+  canvas.addEventListener('touchend', touchUp);
+  canvas.addEventListener('touchcancel', touchUp);
+
+  /* 阻止双指缩放与页面橡皮筋滚动（帮助面板/弹窗内除外） */
+  document.addEventListener('gesturestart', e => e.preventDefault());
+  document.addEventListener('touchmove', e => {
+    const t = e.target;
+    if (t && t.closest && t.closest('#sideHelp, .dialog, textarea')) return;
+    e.preventDefault();
+  }, { passive: false });
+}
+
+/* ================= 渲染 ================= */
+const ctx = canvas.getContext('2d');
+function canvasDpr() {
+  const fit = Math.max(1, (canvas.clientWidth / W) || 1);
+  return (window.devicePixelRatio || 1) * fit;
+}
+function setupCanvas() {
+  const dpr = canvasDpr();
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function ensureCanvasRes() {
+  const want = Math.round(W * canvasDpr());
+  if (Math.abs(canvas.width - want) > 2) setupCanvas();
+}
+setupCanvas();
+window.addEventListener('resize', setupCanvas);
+
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawBoard() {
+  // 外框木纹
+  const wg = ctx.createLinearGradient(0, 0, W, H);
+  wg.addColorStop(0, '#8a5a2b'); wg.addColorStop(0.5, '#6f4620'); wg.addColorStop(1, '#5b3a1a');
+  rr(6, 6, W - 12, W - 12, 16);
+  ctx.fillStyle = wg; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 2; ctx.stroke();
+  // 内部框线
+  rr(FX - 10, FY - 10, FS + 20, FS + 20, 8);
+  ctx.strokeStyle = 'rgba(255,220,160,.25)'; ctx.lineWidth = 2; ctx.stroke();
+
+  // 盘面
+  const fg = ctx.createRadialGradient(CX, CY, 60, CX, CY, FS * 0.75);
+  fg.addColorStop(0, '#f9e7ba'); fg.addColorStop(0.7, '#efd79f'); fg.addColorStop(1, '#e3c583');
+  ctx.fillStyle = fg;
+  ctx.fillRect(FX, FY, FS, FS);
+
+  // 内边墙阴影
+  ctx.strokeStyle = 'rgba(90,50,10,.5)'; ctx.lineWidth = 5;
+  ctx.strokeRect(FX + 2.5, FY + 2.5, FS - 5, FS - 5);
+
+  // 中心装饰
+  ctx.save();
+  ctx.translate(CX, CY);
+  ctx.strokeStyle = 'rgba(140,60,30,.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, 88, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 80, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.stroke();
+  // 花瓣
+  for (let i = 0; i < 8; i++) {
+    ctx.save(); ctx.rotate(i * Math.PI / 4);
+    ctx.beginPath(); ctx.arc(0, -54, 16, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  // 对角箭头
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + i * Math.PI / 2;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    ctx.save(); ctx.rotate(a);
+    ctx.beginPath();
+    ctx.moveTo(105, 0); ctx.lineTo(190, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(190, 0); ctx.lineTo(176, -8); ctx.moveTo(190, 0); ctx.lineTo(176, 8);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // 底线（上下）
+  for (const p of [0, 1]) {
+    const y = baselineY(p);
+    const x1 = CX - BASE_HALF, x2 = CX + BASE_HALF;
+    const activeLine = S.turn === p && S.phase !== 'over';
+    ctx.strokeStyle = activeLine ? 'rgba(200,60,40,.85)' : 'rgba(120,50,25,.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y - 7); ctx.lineTo(x2, y - 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y + 7); ctx.lineTo(x2, y + 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y - 7); ctx.lineTo(x1, y + 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2, y - 7); ctx.lineTo(x2, y + 7); ctx.stroke();
+    for (const ex of [x1, x2]) {
+      ctx.beginPath(); ctx.arc(ex, y, 11, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(180,50,35,.8)'; ctx.lineWidth = 2.5; ctx.stroke();
+    }
+  }
+
+  // 袋口
+  for (const pk of POCKETS) {
+    const pg = ctx.createRadialGradient(pk.x, pk.y, 4, pk.x, pk.y, POCKET_R);
+    pg.addColorStop(0, '#000'); pg.addColorStop(0.75, '#1c1108'); pg.addColorStop(1, '#3a2410');
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, POCKET_R, 0, Math.PI * 2);
+    ctx.fillStyle = pg; ctx.fill();
+    ctx.beginPath(); ctx.arc(pk.x, pk.y, POCKET_R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,215,150,.35)'; ctx.lineWidth = 2; ctx.stroke();
+    // 网
+    ctx.strokeStyle = 'rgba(255,255,255,.07)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 4; i++) {
+      ctx.beginPath(); ctx.arc(pk.x, pk.y, POCKET_R * i / 4, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+}
+
+function drawCoinBody(x, y, r, color, ghost) {
+  let g;
+  if (color === 'W') {
+    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#fffdf3'); g.addColorStop(0.6, '#ecdcba'); g.addColorStop(1, '#c3a877');
+  } else if (color === 'B') {
+    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#6a523c'); g.addColorStop(0.6, '#3d2d1e'); g.addColorStop(1, '#1d130a');
+  } else if (color === 'Q') {
+    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#ffa89a'); g.addColorStop(0.55, '#e05545'); g.addColorStop(1, '#8e2015');
+  } else {
+    g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.55, '#e9edf4'); g.addColorStop(1, '#9fb0c6');
+  }
+  ctx.globalAlpha = ghost ? 0.35 : 1;
+  // 阴影
+  if (!ghost) {
+    ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1; ctx.stroke();
+  // 纹路
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(x, y, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r * 0.3, 0, Math.PI * 2); ctx.stroke();
+  if (color === 'S') {
+    ctx.strokeStyle = 'rgba(60,90,160,.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawAim() {
+  if (!(S.phase === 'aiming' && S.aim)) return;
+  const st = S.striker, aim = S.aim;
+  const res = castRay(st.x, st.y, aim.dir.x, aim.dir.y);
+  const ex = st.x + aim.dir.x * res.t, ey = st.y + aim.dir.y * res.t;
+  // 虚线
+  ctx.save();
+  ctx.setLineDash([9, 8]);
+  ctx.strokeStyle = 'rgba(40,60,120,.75)';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(st.x, st.y); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.restore();
+  // 箭头
+  const ang = Math.atan2(aim.dir.y, aim.dir.x);
+  ctx.save();
+  ctx.translate(ex, ey); ctx.rotate(ang);
+  ctx.fillStyle = 'rgba(40,60,120,.85)';
+  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-6, -7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // 接触点幽灵圈
+  ctx.beginPath(); ctx.arc(ex, ey, STRIKER_R, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(40,60,120,.5)'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+  // 力度环
+  ctx.beginPath();
+  ctx.arc(st.x, st.y, STRIKER_R + 9, -Math.PI / 2, -Math.PI / 2 + aim.power * Math.PI * 2);
+  const hue = 120 - aim.power * 120;
+  ctx.strokeStyle = 'hsl(' + hue + ',80%,55%)';
+  ctx.lineWidth = 4.5; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  drawBoard();
+
+  // 粒子
+  for (const pt of S.particles) {
+    ctx.globalAlpha = clamp(1 - pt.t / pt.life, 0, 1);
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, 2.2, 0, Math.PI * 2);
+    ctx.fillStyle = pt.color; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 棋子
+  for (const c of S.coins) {
+    if (!c.active || c === S.striker) continue;
+    drawCoinBody(c.x, c.y, c.r, c.color, false);
+  }
+  // 选手球
+  const st = S.striker;
+  if (st.active) {
+    const canGrab = inputAllowed();
+    if (canGrab) {
+      ctx.beginPath(); ctx.arc(st.x, st.y, st.r + 6 + Math.sin(performance.now() / 300) * 2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(80,120,220,.5)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    drawCoinBody(st.x, st.y, st.r, 'S', false);
+  }
+  drawAim();
+
+  // AI 提示
+  if (S.phase === 'placing' && isAITurn()) {
+    ctx.fillStyle = 'rgba(232,230,223,.75)';
+    ctx.font = '600 15px "Segoe UI", "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('AI 回合…', CX, baselineY(1) - 42);
+  }
+  // 联机：等待对方出杆提示
+  if (S.mode === 'net' && S.net && S.phase === 'placing' && !isMyTurn()) {
+    ctx.fillStyle = 'rgba(232,230,223,.75)';
+    ctx.font = '600 15px "Segoe UI", "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('等待对方出杆…', CX, baselineY(1 - S.net.myRole) - 42);
+  }
+}
+
+/* ================= 主循环 ================= */
+let lastT = performance.now();
+let lastLoopTick = performance.now();
+function loop(now) {
+  lastLoopTick = now;
+  S._frames = (S._frames || 0) + 1;
+  ensureCanvasRes();
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  if (dt > 0.12) dt = 0.12;
+
+  // AI 摆球动画
+  if (S.aiTween) {
+    const k = clamp((now - S.aiTween.t0) / S.aiTween.dur, 0, 1);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    S.striker.x = S.aiTween.from + (S.aiTween.to - S.aiTween.from) * e;
+    S.striker.y = baselineY(S.turn);
+    if (k >= 1) { const d = S.aiTween.done; S.aiTween = null; if (d) d(); }
+  }
+
+  if (S.phase === 'running') {
+    const steps = Math.max(1, Math.ceil(dt / (1 / 240)));
+    const sub = dt / steps;
+    for (let i = 0; i < steps; i++) physStep(sub);
+    // 停止判定
+    const moving = S.coins.some(c => c.active && (c.vx !== 0 || c.vy !== 0));
+    const timeout = now - S.shotStart > 12000;
+    if ((!moving && now - S.shotStart > 350) || timeout) {
+      for (const c of S.coins) { c.vx = 0; c.vy = 0; }
+      if (S.mode === 'net') {
+        // 联机：房主权威结算后同步全量状态；客人只等待同步
+        if (isNetHost()) {
+          const msgs = resolveShot();
+          sendNet({ t: 'sync', coins: S.coins.filter(c => c !== S.striker).map(c => ({ x: +c.x.toFixed(2), y: +c.y.toFixed(2), c: c.color, a: c.active ? 1 : 0 })), striker: { x: +S.striker.x.toFixed(2), y: +S.striker.y.toFixed(2), a: S.striker.active ? 1 : 0 }, pocketed: S.pocketed.slice(), queen: { onBoard: S.queen.onBoard ? 1 : 0, pendingBy: S.queen.pendingBy, owner: S.queen.owner }, turn: S.turn, phase: S.phase, winner: S.lastWinner, msgs: msgs || [] });
+        } else {
+          S.netWait = true; S.netWaitT = now;
+        }
+      } else {
+        resolveShot();
+      }
+    }
+  }
+  // 联机：客人等待超时兜底（8s 未收到房主同步则本地结算）
+  if (S.netWait && now - S.netWaitT > 8000) {
+    S.netWait = false;
+    resolveShot();
+  }
+
+  // 粒子更新
+  for (const pt of S.particles) {
+    pt.t += dt; pt.x += pt.vx * dt; pt.y += pt.vy * dt;
+    pt.vx *= 0.94; pt.vy *= 0.94;
+  }
+  S.particles = S.particles.filter(pt => pt.t < pt.life);
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ================= UI ================= */
+function toast(msg) {
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.classList.add('out'), 1900);
+  setTimeout(() => el.remove(), 2500);
+}
+function updateUI() {
+  // 名称
+  document.getElementById('name0').textContent = playerName(0) + '（白）';
+  document.getElementById('name1').textContent = playerName(1) + '（黑）';
+  // 高亮
+  document.getElementById('card0').classList.toggle('active', S.turn === 0 && S.phase !== 'over');
+  document.getElementById('card1').classList.toggle('active', S.turn === 1 && S.phase !== 'over');
+  document.getElementById('turnArrow').textContent = S.turn === 0 ? '◀' : '▶';
+  // pips
+  for (const p of [0, 1]) {
+    const box = document.getElementById('pips' + p);
+    box.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const d = document.createElement('span');
+      d.className = 'pip' + (i < S.pocketed[p] ? ' on ' + colorOf(p) : '');
+      box.appendChild(d);
+    }
+  }
+  // 皇后徽标
+  const q0 = document.getElementById('q0'), q1 = document.getElementById('q1');
+  q0.className = 'qbadge'; q1.className = 'qbadge';
+  if (S.queen.owner === 0) q0.classList.add('owned');
+  if (S.queen.owner === 1) q1.classList.add('owned');
+  if (S.queen.pendingBy !== null && S.queen.owner === null) {
+    (S.queen.pendingBy === 0 ? q0 : q1).classList.add('pending');
+  }
+  // 提示
+  const hint = document.getElementById('hint');
+  if (S.phase === 'over') hint.textContent = '对局结束，点击「新游戏」再来一局';
+  else if (isAITurn()) hint.textContent = 'AI 正在出杆…';
+  else if (S.netWait) hint.textContent = '等待对方结算同步…';
+  else if (S.mode === 'net' && S.phase === 'running' && !isMyTurn()) hint.textContent = '对方出杆中…';
+  else if (S.mode === 'net' && (S.phase === 'placing' || S.phase === 'aiming') && !isMyTurn()) hint.textContent = '等待对方出杆…';
+  else if (S.phase === 'running') hint.textContent = '运行中…';
+  else if (S.phase === 'aiming') hint.textContent = '瞄准中 — 松手出杆，拖回选手球附近取消';
+  else {
+    let t = '按住选手球沿底线拖动摆放 · 在盘面空白处按住向后拖动瞄准 · 松手出杆';
+    if (S.queen.pendingBy === S.turn) t = '⚠ 皇后待覆盖：这一杆必须打进一枚己方棋子！';
+    hint.textContent = t;
+  }
+}
+
+/* ================= 积分榜 ================= */
+const LB_KEY = 'carrom_lb_v1';
+function loadLB() {
+  try { return JSON.parse(localStorage.getItem(LB_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveLB(lb) {
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch (e) {}
+}
+function recordResult(winner) {
+  const lb = loadLB();
+  for (const p of [0, 1]) {
+    const n = playerName(p);
+    if (!lb[n]) lb[n] = { wins: 0, games: 0 };
+    lb[n].games++;
+    if (p === winner) lb[n].wins++;
+  }
+  saveLB(lb);
+  renderScoreboard();
+}
+function renderScoreboard() {
+  const lb = loadLB();
+  const rows = Object.keys(lb).map(n => ({ n, wins: lb[n].wins, games: lb[n].games }));
+  rows.sort((a, b) => b.wins - a.wins || b.games - a.games || a.n.localeCompare(b.n, 'zh'));
+  const body = document.getElementById('lbBody');
+  const empty = document.getElementById('lbEmpty');
+  if (!rows.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  body.innerHTML = rows.map((r, i) => {
+    const rate = r.games ? Math.round(r.wins * 100 / r.games) + '%' : '—';
+    return '<tr' + (i === 0 ? ' class="top"' : '') + '><td>' + (i + 1) + '</td><td class="n" title="' +
+      r.n.replace(/"/g, '&quot;').replace(/</g, '&lt;') + '">' + r.n.replace(/</g, '&lt;') +
+      '</td><td>' + r.wins + '</td><td>' + r.games + '</td><td>' + rate + '</td></tr>';
+  }).join('');
+}
+function editName(p) {
+  if (p === 1 && S.mode === 'ai') return; // AI 不可改名
+  const input = prompt((p === 0 ? '白方' : '黑方') + '昵称（最多 8 个字）：', playerName(p));
+  if (input === null) return;
+  const t = input.trim().slice(0, 8);
+  if (t) { S.names[p] = t; updateUI(); }
+}
+
+/* ================= 联机（WebRTC 点对点） ================= */
+const RTC_CFG = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun.miwifi.com:3478'] },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+] };
+function netStatus(t) { document.getElementById('netStatus').textContent = t; }
+function netEnc(type, sdp) { return btoa(unescape(encodeURIComponent(JSON.stringify({ t: type, sdp })))); }
+function netDec(str) { return JSON.parse(decodeURIComponent(escape(atob(str.trim())))); }
+function waitGather(pc) {
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const to = setTimeout(res, 3500);
+    pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') { clearTimeout(to); res(); }
+    });
+  });
+}
+function netCleanup() {
+  if (S.net) {
+    try { clearInterval(S.net.pingTimer); } catch (e) {}
+    try { S.net.dc && S.net.dc.close(); } catch (e) {}
+    try { S.net.pc && S.net.pc.close(); } catch (e) {}
+  }
+  S.net = null; S.netWait = false;
+}
+function netDrop(reason) {
+  const had = !!S.net;
+  netCleanup();
+  if (!had) return;
+  S.mode = 'pvp';
+  document.getElementById('btnMode').textContent = '模式：双人';
+  resetGame(reason || '联机已断开，切换为本地双人');
+}
+function netWire(dc) {
+  dc.onopen = () => {
+    S.mode = 'net';
+    S.net.openT = Date.now(); S.net.lastMsg = Date.now();
+    document.getElementById('btnMode').textContent = '模式：联机';
+    sendNet({ t: 'hello', name: playerName(S.net.myRole) });
+    document.getElementById('netModal').classList.remove('show');
+    netStatus('已连接');
+    // 心跳保活：2s 一跳，6s 无消息判定掉线
+    S.net.pingTimer = setInterval(() => {
+      sendNet({ t: 'ping' });
+      if (Date.now() - (S.net.lastMsg || S.net.openT) > 6000) netDrop('连接超时，对方可能已离线');
+    }, 2000);
+    if (S.net.myRole === 0) resetGame('联机成功！你是白方（下方）');
+    else { updateUI(); toast('联机成功！你是黑方（上方），等待房主开局…'); }
+  };
+  dc.onclose = () => { if (S.mode === 'net') netDrop('对方已断开联机'); };
+  dc.onmessage = e => {
+    if (S.net) S.net.lastMsg = Date.now();
+    let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t === 'ping') return;
+    if (m.t === 'hello') { S.net.peerName = m.name || '对手'; updateUI(); return; }
+    if (m.t === 'reset') { if (S.net && S.net.myRole === 1) resetGame(null, true); return; }
+    if (m.t === 'shot') {
+      if (S.phase !== 'placing' && S.phase !== 'aiming') return;
+      if (S.mode !== 'net' || S.turn === S.net.myRole) return;
+      S.drag = null; S.aim = null;
+      S.striker.x = m.striker.x; S.striker.y = m.striker.y;
+      doShoot(m.dir, m.power);
+      return;
+    }
+    if (m.t === 'sync') {
+      if (!S.net || S.net.myRole !== 1) return;
+      S.netWait = false; S.shotEvents = null;
+      S.coins = m.coins.map(o => mkCoin(o.x, o.y, o.c));
+      S.striker = mkCoin(m.striker.x, m.striker.y, 'S');
+      S.striker.active = !!m.striker.a;
+      S.coins.push(S.striker);
+      S.pocketed = m.pocketed;
+      S.queen = { onBoard: !!m.queen.onBoard, pendingBy: m.queen.pendingBy, owner: m.queen.owner };
+      S.turn = m.turn;
+      (m.msgs || []).forEach((t, i) => setTimeout(() => toast(t), i * 400));
+      if (m.phase === 'over') gameOver(m.winner);
+      else { S.phase = 'placing'; S.aim = null; S.drag = null; startTurn(); }
+      return;
+    }
+  };
+}
+async function netCreateOffer() {
+  if (typeof RTCPeerConnection === 'undefined') { netStatus('当前环境不支持联机（iOS 需 14.3 及以上），可玩人机/双人模式'); return; }
+  netCleanup();
+  try {
+    const pc = new RTCPeerConnection(RTC_CFG);
+    S.net = { myRole: 0, pc, dc: null, peerName: null };
+    pc.onconnectionstatechange = () => {
+      const cs = pc.connectionState;
+      if ((cs === 'failed' || cs === 'closed') && S.mode === 'net') netDrop('联机连接失败');
+    };
+    const dc = pc.createDataChannel('game', { ordered: true });
+    S.net.dc = dc;
+    netWire(dc);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitGather(pc);
+    document.getElementById('netOut').value = netEnc('offer', pc.localDescription.sdp);
+    netStatus('邀请码已生成 → 复制发给对方；收到应答码后粘贴到上方点「连接」');
+  } catch (e) { netStatus('创建失败：' + e.message); }
+}
+async function netMakeAnswer() {
+  if (typeof RTCPeerConnection === 'undefined') { netStatus('当前环境不支持联机（iOS 需 14.3 及以上），可玩人机/双人模式'); return; }
+  let msg;
+  try { msg = netDec(document.getElementById('netIn').value); }
+  catch (e) { netStatus('邀请码格式错误'); return; }
+  if (msg.t !== 'offer') { netStatus('请先把对方的「邀请码」粘贴到上面输入框'); return; }
+  netCleanup();
+  try {
+    const pc = new RTCPeerConnection(RTC_CFG);
+    S.net = { myRole: 1, pc, dc: null, peerName: null };
+    pc.onconnectionstatechange = () => {
+      const cs = pc.connectionState;
+      if ((cs === 'failed' || cs === 'closed') && S.mode === 'net') netDrop('联机连接失败');
+    };
+    pc.ondatachannel = e => { S.net.dc = e.channel; netWire(e.channel); };
+    await pc.setRemoteDescription({ type: 'offer', sdp: msg.sdp });
+    const ans = await pc.createAnswer();
+    await pc.setLocalDescription(ans);
+    await waitGather(pc);
+    document.getElementById('netOut').value = netEnc('answer', pc.localDescription.sdp);
+    netStatus('应答码已生成 → 复制回传给对方，等待连接…');
+  } catch (e) { netStatus('生成应答码失败：' + e.message); }
+}
+async function netAcceptAnswer() {
+  if (!S.net || !S.net.pc || S.net.myRole !== 0) { netStatus('请先点「创建邀请码」'); return; }
+  let msg;
+  try { msg = netDec(document.getElementById('netIn').value); }
+  catch (e) { netStatus('应答码格式错误'); return; }
+  if (msg.t !== 'answer') { netStatus('请把对方的「应答码」粘贴到上面输入框'); return; }
+  try {
+    await S.net.pc.setRemoteDescription({ type: 'answer', sdp: msg.sdp });
+    netStatus('正在连接…');
+  } catch (e) { netStatus('连接失败：' + e.message); }
+}
+
+/* 按钮 */
+document.getElementById('btnNew').addEventListener('click', () => {
+  if (S.mode === 'net' && S.net && S.net.myRole === 1) { toast('联机中由房主开局'); return; }
+  Snd.ensure(); resetGame('新对局开始！');
+});
+document.getElementById('btnMode').addEventListener('click', function () {
+  if (S.mode === 'net') { netDrop('已退出联机，切换为本地双人'); return; }
+  S.mode = S.mode === 'ai' ? 'pvp' : 'ai';
+  this.textContent = S.mode === 'ai' ? '模式：人机' : '模式：双人';
+  resetGame(S.mode === 'ai' ? '人机对战开始！' : '双人对战开始！');
+});
+document.getElementById('btnHelp').addEventListener('click', () => {
+  document.getElementById('sideHelp').classList.toggle('hide');
+});
+document.getElementById('btnNet').addEventListener('click', () => {
+  document.getElementById('netModal').classList.add('show');
+  netStatus(isNetOpen() ? '已连接：' + playerName(1 - S.net.myRole) : (S.net ? '配对进行中…' : '未连接'));
+});
+document.getElementById('btnNetHost').addEventListener('click', () => netCreateOffer());
+document.getElementById('btnNetJoin').addEventListener('click', () => netMakeAnswer());
+document.getElementById('btnNetConnect').addEventListener('click', () => netAcceptAnswer());
+document.getElementById('btnNetClose').addEventListener('click', () => {
+  document.getElementById('netModal').classList.remove('show');
+});
+document.getElementById('btnNetCopy').addEventListener('click', () => {
+  const ta = document.getElementById('netOut');
+  if (!ta.value) { netStatus('上方还没有可复制的代码'); return; }
+  const done = () => netStatus('已复制，去粘贴发给对方吧');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(done).catch(() => { ta.select(); document.execCommand('copy'); done(); });
+  } else { ta.select(); document.execCommand('copy'); done(); }
+});
+document.getElementById('btnSound').addEventListener('click', function () {
+  S.sound = !S.sound;
+  this.textContent = S.sound ? '音效：开' : '音效：关';
+});
+document.getElementById('btnAgain').addEventListener('click', () => {
+  if (S.mode === 'net' && S.net && S.net.myRole === 1) { toast('联机中由房主开局'); return; }
+  resetGame('新对局开始！');
+});
+document.getElementById('btnCloseWin').addEventListener('click', () => document.getElementById('winModal').classList.remove('show'));
+document.getElementById('btnBoard').addEventListener('click', () => {
+  renderScoreboard();
+  document.getElementById('lbModal').classList.add('show');
+});
+document.getElementById('btnLbClose').addEventListener('click', () => document.getElementById('lbModal').classList.remove('show'));
+document.getElementById('btnLbClear').addEventListener('click', () => {
+  if (confirm('确定清空所有积分记录吗？')) { saveLB({}); renderScoreboard(); }
+});
+document.getElementById('name0').addEventListener('click', () => editName(0));
+document.getElementById('name1').addEventListener('click', () => editName(1));
+
+/* 启动 */
+resetGame();
+renderScoreboard();
+requestAnimationFrame(loop);
+// 看门狗：标签页后台导致 rAF 暂停时，仍以低频驱动物理与结算
+setInterval(() => {
+  const now = performance.now();
+  if (now - lastLoopTick > 120) loop(now);
+}, 60);
+window.__S = S; // 调试钩子
+window.__loop = loop; // 调试：手动驱动物理帧
+</script>
+</body>
+</html>

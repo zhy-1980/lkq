@@ -1,0 +1,50 @@
+name: Build iOS IPA
+
+# 手动触发，或推送游戏页面/工程文件时自动触发
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '克朗棋.html'
+      - 'ios/**'
+      - '.github/workflows/build-ipa.yml'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 游戏页面单一来源是仓库根目录的 克朗棋.html，构建前同步进 App 资源目录
+      - name: Prepare www bundle
+        run: |
+          mkdir -p ios/Carrom/www
+          cp "克朗棋.html" ios/Carrom/www/index.html
+
+      - name: Build (unsigned arm64, min iOS 12.0)
+        run: |
+          cd ios
+          xcodebuild -project Carrom.xcodeproj -target Carrom \
+            -configuration Release -sdk iphoneos \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ARCHS=arm64 \
+            SYMROOT=build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R ios/build/Release-iphoneos/Carrom.app build/Payload/
+          cd build
+          zip -qry Carrom-unsigned.ipa Payload
+          ls -lh Carrom-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Carrom-unsigned-ipa
+          path: build/Carrom-unsigned.ipa

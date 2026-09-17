@@ -1,0 +1,11 @@
+# 构建产物
+ios/build/
+build/
+dist/
+*.ipa
+*.xcarchive
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
