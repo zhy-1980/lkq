@@ -15,7 +15,8 @@
 
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     config.allowsInlineMediaPlayback = YES;
-    config.mediaTypesRequiringUserAction = WKAudiovisualMediaTypeNone;
+    // 注：mediaTypesRequiringUserAction 在新版 SDK（Xcode 26+）中已被 Apple 移除，
+    // 本游戏无 <audio>/<video> 元素（音效由 WebAudio 合成），无需设置媒体自动播放策略。
 
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:config];
     self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
